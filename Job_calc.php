@@ -59,76 +59,97 @@ class Job_calc {
 		$night_start_time = strtotime($night_start);
 		$night_end_time = strtotime($night_end);
 
-		if ($start == '0:00' && $end == '0:00')
+		if ($start == '00:00' && $end == '00:00')
 		{
 			// 有休、振休、欠勤など
 			return $total;
 		}
-		else if ($night_end_time <= $start_time && $end_time <= $night_start_time)
-		{
-			// 深夜時間の勤務がない
-			return $total;
-		}
-		else if ($night_start == '0:00' && $night_end == '0:00')
+// 		else if (!(($start <= $night_start && $night_start <= $end) ||
+// 				   ($start <= $night_end   && $night_end   <= $end) ||
+// 				   ($night_start <= $start && $start <= $night_end) ||
+// 				   ($night_start <= $end   && $end   <= $night_end)))
+// 		{
+// 			// [tips] phpは文字列で時刻の比較が可能
+// 			// 深夜時間の勤務がない
+// 			return $total;
+//		}
+		else if ($night_start == '00:00' && $night_end == '00:00')
 		{
 			// 深夜時間が設定されていない
 			return $total;
 		}
 
-		// 日付をまたぐ場合は、2回に分けて計算する
-		if ($start_time > $end_time)
-		{
-			if ($start_time < $night_start_time)
-			{
-				// 深夜開始時間より前から勤務開始している場合
-				$total += (strtotime('24:00') - $night_start_time) / 3600;
-			}
-			else
-			{
-				// 深夜開始時間より後から勤務開始している場合
-				$total += (strtotime('24:00') - $start_time) / 3600;
-			}
-
-			if ($end_time < $night_end_time)
-			{
-				// 深夜終了時間より前に勤務終了している場合
-				$total += ($end_time - strtotime('00:00')) / 3600;
-			}
-			else
-			{
-				// 深夜終了時間より後に勤務終了している場合
-				$total += ($night_end_time - strtotime('00:00')) / 3600;
-			}
-		}
-		else
+		// ------------------------------------------------
+		// 日付を超える場合
+		// ------------------------------------------------
+		if ($start > $end)
 		{
 			// 深夜終了時間より前に勤務開始している場合
-			if ($start_time <= $night_end_time)
+// 			if (($night_start >  $night_end && $start < '24:00' && '00:00' < $night_end) ||	// 深夜枠が日付を超える場合
+// 				($night_start <= $night_end && $start < $night_end))						// 深夜枠が日付を超えない場合
+			if ($start < $night_end)
 			{
-				if ($night_end_time <= $end_time)
+				if ($night_end <= $end)
 				{
 					// 深夜終了時間より後に勤務終了している場合
-					$total += ($night_end_time - $start_time) / 3600;
+					$total += self::_time_diff($start, $night_end);
 				}
 				else
 				{
 					// 深夜終了時間より前に勤務終了している場合
-					$total += ($end_time - $start_time) / 3600;
+					$total += self::_time_diff($start, $end);
 				}
 			}
 
-			// 深夜終了時間より後に勤務開始している場合
-			if ($night_end_time <= $start_time)
+			// 深夜開始時間より後に勤務終了している場合
+// 			if (($night_start >  $night_end && $night_start < '24:00' && '00:00' < $end) ||	// 深夜枠が日付を超える場合
+// 				($night_start <= $night_end && $night_start < $end))
+			if ($night_start < $end)
 			{
-				if ($start_time <= $night_start_time)
+				if ($start <= $night_start)
 				{
 					// 深夜開始時間より前に勤務開始している場合
-					$total += ($end_time - $night_start_time) / 3600;
+					$total += self::_time_diff($night_start, $end);
 				}
 				else
 				{
 					// 深夜開始時間より後に勤務開始している場合
-					$total += ($end_time - $start_time) / 3600;
+					$total += self::_time_diff($start, $end);
+				}
+			}
+		}
+		// ------------------------------------------------
+		// 日付を超えない場合
+		// ------------------------------------------------
+		else
+		{
+			// 深夜終了時間より前に勤務開始している場合
+			if ($start < $night_end)
+			{
+				if ($night_end <= $end)
+				{
+					// 深夜終了時間より後に勤務終了している場合
+					$total += self::_time_diff($start, $night_end);
+				}
+				else
+				{
+					// 深夜終了時間より前に勤務終了している場合
+					$total += self::_time_diff($start, $end);
+				}
+			}
+
+			// 深夜開始時間より後に勤務終了している場合
+			if ($night_start < $end)
+			{
+				if ($start <= $night_start)
+				{
+					// 深夜開始時間より前に勤務開始している場合
+					$total += self::_time_diff($night_start, $end);
+				}
+				else
+				{
+					// 深夜開始時間より後に勤務開始している場合
+					$total += self::_time_diff($start, $end);
 				}
 			}
 		}
@@ -167,6 +188,26 @@ class Job_calc {
 		// 休憩時間
 		$total -= $break_time;
 
+		return $total;
+	}
+
+	/**
+	 * 時刻の差を返却します。
+	 * 日付を超える場合も考慮します。
+	 *
+	 * @param string $start
+	 * @param string $end
+	 */
+	function _time_diff($start, $end)
+	{
+		$total = 0;
+	// 日付をまたぐ場合は、2回に分けて計算する
+		if ($start > $end) {
+			$total += (strtotime('24:00') - strtotime($start))  / (60 * 60);
+			$total += (strtotime($end)    - strtotime('00:00')) / (60 * 60);
+		} else {
+			$total = (strtotime($end) - strtotime($start)) / (60 * 60);
+		}
 		return $total;
 	}
 }
